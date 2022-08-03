@@ -18,9 +18,10 @@ class VAE(BaseEstimator, TransformerMixin):
         self.model = model
         self.callbacks = callbacks
         self.verbose = verbose
-        self.loss_history_ = []
         self.callbacks = callbacks
+        self.dataframe = True
         
+        self.loss_history_ = []
         self.callbacks_ = None
         self.encoder_ = None
         self.decoder_ = None
@@ -55,6 +56,14 @@ class VAE(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         #check_is_fitted(self.estimator)
         #self.reference_X = estimator.transform(X, y)
+        if type(X) == pd.core.frame.DataFrame:
+            pass
+        elif type(X) == np.ndarray:
+            self.dataframe = False
+            X = pd.DataFrame(X)
+        else:
+            raise TypeError("Model requires input type as pandas.core.frame.DataFrame or numpy.ndarray.")
+            
         if self.preprocessor is not None:
             self.preprocessor.fit(X)
             Xt = self.preprocessor.transform(X)
@@ -62,7 +71,7 @@ class VAE(BaseEstimator, TransformerMixin):
         else:
             Xt = X.copy()
             
-        self._fit(Xt) 
+        self._fit(Xt)
         self.encoder_ = self.model.layers[1]
         self.decoder_ = self.model.layers[2]
         
@@ -73,6 +82,9 @@ class VAE(BaseEstimator, TransformerMixin):
     def transform(self, X):
         if self.encoder_ is None:
             raise NotFittedError("Model was not fitted yet. Call `fit` before calling `transform`.")
+            
+        if not self.dataframe:
+            X = pd.DataFrame(X)
         
         if self.preprocessor is not None:
             Xt = self.preprocessor.transform(X)
@@ -89,6 +101,9 @@ class VAE(BaseEstimator, TransformerMixin):
         if self.encoder_ is None:
             raise NotFittedError("Model was not fitted yet. Call `fit` before calling `sample`.")
 
+        if not self.dataframe:
+            X = pd.DataFrame(X)
+            
         encoder_pred = self.encoder_.predict(self.preprocessor.transform(X))
         ecdf = ECDF(encoder_pred[:, 0])
         x_min = encoder_pred.min()
@@ -98,9 +113,8 @@ class VAE(BaseEstimator, TransformerMixin):
         
         edf_samples = [ecdf(i) for i in x]
         inverted_edf = interp1d(edf_samples, x)
-        #print(np.max(edf_samples))
         
-        self.samples_ = pd.DataFrame(self.decoder_(inverted_edf(np.random.uniform(np.min(edf_samples), np.max(edf_samples), N))).numpy(), 
+        self.samples_ = pd.DataFrame(self.decoder_(inverted_edf(np.random.uniform(np.min(edf_samples), 1, N))).numpy(), 
                                     columns=self.preprocessor.columns)
         self.decoded_samples_ = self.preprocessor.inverse_transform(self.samples_)
         

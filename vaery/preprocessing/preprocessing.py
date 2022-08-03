@@ -5,32 +5,46 @@ from sklearn.preprocessing import MinMaxScaler, OrdinalEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.exceptions import NotFittedError
+from sklearn.preprocessing import FunctionTransformer
 
 class VAEPreprocessor(BaseEstimator):
-    def __init__(self):
-        self.categorical = None
-        self.numerical = None
+    def __init__(self, other=[]):
+        self.binary = None
+        self.normal = None
+        self.other = other
         self.columns = None
         self.vae_preprocessor = None
         self.result = None
+        self.components = []
         
+    def get_column_types(self, X, y=None):
+        self.columns = X.columns.values
+        self.binary = X.select_dtypes(include=['O']).columns.values
+        normal = X.select_dtypes(include=['int', 'float']).columns.values
+        if len(self.other) == 0:
+            self.normal = normal
+        else:
+            self.normal = normal[~np.isin(normal, self.other)]
+
     def fit(self, X, y=None):
-        self.categorical = X.select_dtypes(include=['O']).columns.values
-        self.numerical = X.select_dtypes(include=['int', 'float']).columns.values
-        self.columns = Xs.columns.values
-        
-        categorical_transformer = Pipeline(steps=[('encoder', OrdinalEncoder())])
-        numerical_transformer = Pipeline(steps=[('scaler', MinMaxScaler())])
+        self.get_column_types(X)
+        binary_transformer = Pipeline(steps=[('encoder', OrdinalEncoder())])
+        normal_transformer = Pipeline(steps=[('normal_scaler', MinMaxScaler())])
+        log_transformer = FunctionTransformer(np.log1p)
+        other_transformer = Pipeline(steps=[('other_log', log_transformer), ('other_scaler', MinMaxScaler())])
         self.vae_preprocessor = ColumnTransformer(transformers=
-                                         [('cat', categorical_transformer, self.categorical), 
-                                          ('num', numerical_transformer, self.numerical)],
+                                         [('binary', binary_transformer, self.binary), 
+                                          ('normal', normal_transformer, self.normal), 
+                                          ('other', other_transformer, self.other)],
                                          remainder='passthrough')
         self.vae_preprocessor.fit(X)
         
         return self
         
     def transform(self, X, y=None):
-        result = pd.DataFrame(self.vae_preprocessor.transform(X), columns=np.append(self.categorical, self.numerical))
+        result = pd.DataFrame(self.vae_preprocessor.transform(X), 
+                              columns=np.append(np.append(self.binary, self.normal), self.other))
         result = result.fillna(0)
         result = result.replace([np.inf, -np.inf], 0)
         self.result = result
@@ -39,16 +53,35 @@ class VAEPreprocessor(BaseEstimator):
     
     def fit_transform(self, X, y=None):
         self.fit(X)
-        
+
         return self.transform(X)
     
     def inverse_transform(self, X):
-        X[self.categorical] = np.abs(np.round(X[self.categorical]))
-        X_cat = pd.DataFrame(self.vae_preprocessor.transformers_[0][1].inverse_transform(X[self.categorical]), 
-                             columns=self.categorical)
-        X_num = pd.DataFrame(self.vae_preprocessor.transformers_[1][1].inverse_transform(X[self.numerical]), 
-                             columns=self.numerical)
-        X_num = np.abs(np.round(X_num))
-        result = pd.merge(X_cat, X_num, how='outer', left_index=True, right_index=True)
+        X[self.binary] = np.abs(np.round(X[self.binary]))
+        try:
+            X_binary = pd.DataFrame(self.vae_preprocessor.transformers_[0][1].inverse_transform(X[self.binary]), 
+                                    columns=self.binary)
+            self.components.append(X_binary)
+        except NotFittedError:
+            pass
         
+        try:
+            X_normal = pd.DataFrame(self.vae_preprocessor.transformers_[1][1].inverse_transform(X[self.normal]), 
+                                    columns=self.normal)
+            X_normal = np.abs(np.round(X_normal))
+            self.components.append(X_normal)
+        except NotFittedError:
+            pass
+                
+        if self.other != []:
+            X_other = self.vae_preprocessor.transformers_[2][1][1].inverse_transform(X[self.other])
+            X_other = np.exp(X_other) - 1
+            X_other = pd.DataFrame(X_other, columns=self.other)
+            X_other = np.abs(np.round(X_other))
+            self.components.append(X_other)
+            
+        result = self.components[0]
+        for i in range(len(self.components)-1):
+            result = pd.merge(result, self.components[i+1], how='outer', left_index=True, right_index=True)
+        #print(result)
         return result[self.columns]

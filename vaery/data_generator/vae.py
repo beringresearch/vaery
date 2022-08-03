@@ -6,11 +6,12 @@ tf.random.set_seed(1234)
 from sklearn.base import BaseEstimator, TransformerMixin
 from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.interpolate import interp1d
+from base_model import BaseModel
 
 class VAE(BaseEstimator, TransformerMixin):       
     def __init__(self, *, preprocessor=None, batch_size=1024, 
                  epochs=1000, n_epochs_without_progress=50, 
-                 model=base_model(latent_dim=1), callbacks=None, verbose=1):
+                 model=BaseModel(latent_dim=1), callbacks=None, verbose=1):
         self.preprocessor = preprocessor
         self.batch_size = batch_size
         self.epochs = epochs

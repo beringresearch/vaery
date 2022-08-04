@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='vaery',
-      version='0.0.3',
+      version='0.0.4',
       description='Synthetic data generator',
       url='http://github.com/beringresearch/vaery',
       author='Bering Limited',

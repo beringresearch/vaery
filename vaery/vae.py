@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 tf.random.set_seed(1234)
+np.random.seed(2021)
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from statsmodels.distributions.empirical_distribution import ECDF
@@ -36,27 +37,24 @@ class VAE(BaseEstimator, TransformerMixin):
         #    if isinstance(callback, ModelCheckpoint):
         #        callback.register_ivis_model(self)
 
-        
-    def _fit(self, X, Y=None, shuffle_mode=False):
+    def _fit(self, X, Y=None, shuffle_mode=True):
         self._validate_parameters()
         if self.verbose > 0:
             print('Training neural network')
 
         hist = self.model.fit(
-            X, X, ###
+            X, X,
             epochs=self.epochs,
-            callbacks=self.callbacks_ + [tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                       patience=self.n_epochs_without_progress, 
-                                                       restore_best_weights=True)],
-            validation_split=0.2, ###
+            #callbacks=self.callbacks_ + [tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+            #                                           patience=self.n_epochs_without_progress, 
+            #                                           restore_best_weights=False)], #####
+            validation_split=0.2,
             shuffle=shuffle_mode,
             steps_per_epoch=int(np.ceil(X.shape[0] / self.batch_size)),
             verbose=self.verbose)
         self.loss_history_ += hist.history['loss']
     
     def fit(self, X, y=None):
-        #check_is_fitted(self.estimator)
-        #self.reference_X = estimator.transform(X, y)
         if type(X) == pd.core.frame.DataFrame:
             pass
         elif type(X) == np.ndarray:
@@ -94,7 +92,7 @@ class VAE(BaseEstimator, TransformerMixin):
             
         else:
             Xt = X.copy()
-            result = self.model.predict(Xt)
+            result = pd.DataFrame(self.model.predict(Xt), columns=X.columns)
             
         return result
     
@@ -104,8 +102,12 @@ class VAE(BaseEstimator, TransformerMixin):
 
         if not self.dataframe:
             X = pd.DataFrame(X)
+        
+        if self.preprocessor is not None:
+            encoder_pred = self.encoder_.predict(self.preprocessor.transform(X))
+        else:
+            encoder_pred = self.encoder_.predict(X)
             
-        encoder_pred = self.encoder_.predict(self.preprocessor.transform(X))
         ecdf = ECDF(encoder_pred[:, 0])
         x_min = encoder_pred.min()
         x_max = encoder_pred.max()
@@ -115,8 +117,13 @@ class VAE(BaseEstimator, TransformerMixin):
         edf_samples = [ecdf(i) for i in x]
         inverted_edf = interp1d(edf_samples, x)
         
-        self.samples_ = pd.DataFrame(self.decoder_(inverted_edf(np.random.uniform(np.min(edf_samples), 1, N))).numpy(), 
-                                    columns=self.preprocessor.columns)
-        self.decoded_samples_ = self.preprocessor.inverse_transform(self.samples_)
+        #self.samples_ = pd.DataFrame(self.decoder_(inverted_edf(np.random.uniform(0.05, 0.95, N))).numpy(), 
+        self.samples_ = pd.DataFrame(self.decoder_(inverted_edf(np.random.uniform(np.min(edf_samples), np.max(edf_samples), N))).numpy(), 
+                                    columns=X.columns)
         
+        if self.preprocessor is not None:
+            self.decoded_samples_ = self.preprocessor.inverse_transform(self.samples_)
+        else:
+            self.decoded_samples_ = self.samples_.copy()
+
         return self

@@ -68,7 +68,6 @@ class VAEPreprocessor(BaseEstimator):
         try:
             X_normal = pd.DataFrame(self.vae_preprocessor.transformers_[1][1].inverse_transform(X[self.normal]), 
                                     columns=self.normal)
-            X_normal = np.abs(np.round(X_normal))
             self.components.append(X_normal)
         except NotFittedError:
             pass
@@ -77,7 +76,6 @@ class VAEPreprocessor(BaseEstimator):
             X_other = self.vae_preprocessor.transformers_[2][1][1].inverse_transform(X[self.other])
             X_other = np.exp(X_other) - 1
             X_other = pd.DataFrame(X_other, columns=self.other)
-            X_other = np.abs(np.round(X_other))
             self.components.append(X_other)
             
         result = self.components[0]

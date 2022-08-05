@@ -47,7 +47,7 @@ class VAE(BaseEstimator, TransformerMixin):
         hist = self.model.fit(
             X, X,
             epochs=self.epochs,
-            callbacks=self.callbacks_
+            callbacks=self.callbacks_,
             #+ [tf.keras.callbacks.EarlyStopping(monitor='val_loss',
             #                                           patience=self.n_epochs_without_progress, 
             #                                           restore_best_weights=False)], #####

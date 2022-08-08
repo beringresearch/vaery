@@ -47,9 +47,9 @@ class VAEPreprocessor(BaseEstimator):
                               columns=np.append(np.append(self.binary, self.normal), self.other))
         result = result.fillna(0)
         result = result.replace([np.inf, -np.inf], 0)
-        self.result = result
+        result = result
         
-        return self.result
+        return result
     
     def fit_transform(self, X, y=None):
         self.fit(X)
